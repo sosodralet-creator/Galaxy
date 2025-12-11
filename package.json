@@ -1,7 +1,7 @@
 {
   "name": "soso-galaxy-conquest",
   "version": "1.0.0",
-  "description": "Conquête spatiale comme Call of War",
+  "description": "Conquête spatiale",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
