@@ -1,0 +1,14 @@
+{
+  "name": "Galaxy conquest",
+  "version": "0.1.0",
+  "description": "Call of War mais conquête spatiale ! Open source RTS browser",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "mongoose": "^8.5.1"
+  }
+}
