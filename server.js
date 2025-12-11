@@ -1,69 +1,62 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
-app.use(express.static('public'));
-
-// Game state
-let planets = [
-  { id: 1, name: 'Terra', x: 400, y: 300, owner: null, resources: { metal: 1000, energy: 500 }, buildings: { mine: 1, power: 1, shipyard: 0 }, army: { fighter: 20 } },
-  { id: 2, name: 'Vega', x: 900, y: 300, owner: null, resources: { metal: 800, energy: 400 }, buildings: { mine: 0, power: 0, shipyard: 0 }, army: { fighter: 0 } },
-  { id: 3, name: 'Zaros', x: 600, y: 600, owner: null, resources: { metal: 500, energy: 300 }, buildings: { mine: 0, power: 0, shipyard: 0 }, army: { fighter: 0 } },
-];
-
-let fleets = [];
-let players = {};
-
-io.on('connection', socket => {
-  console.log('connect', socket.id);
-  
-  // assign starter planet
-  const starter = planets.find(p => p.owner === null);
-  if (starter) {
-    starter.owner = socket.id;
-    players[socket.id] = { id: socket.id, name: `Player-${socket.id.slice(0,4)}`, planetId: starter.id };
-  }
-
-  socket.emit('state', { planets, fleets, players });
-
-  socket.on('build', ({ planetId, building }) => {
-    const planet = planets.find(p => p.id === planetId);
-    if (planet && planet.owner === socket.id) {
-      planet.buildings[building] = (planet.buildings[building] || 0) + 1;
-      io.emit('state', { planets, fleets, players });
-    }
-  });
-
-  socket.on('sendFleet', ({ from, to }) => {
-    const src = planets.find(p => p.id === from);
-    const dst = planets.find(p => p.id === to);
-    if (!src || !dst || src.owner !== socket.id) return;
-    fleets.push({ id: Date.now(), from, to, progress: 0, owner: socket.id });
-  });
-
-  socket.on('disconnect', () => {
-    console.log('disconnect', socket.id);
-  });
+socket.on('build_launcher', () => {
+const p = players[socket.id]; if (!p) return;
+const cost = 200;
+if (p.resources < cost) {
+socket.emit('error_msg', 'Pas assez de ressources pour construire un lanceur (200).');
+return;
+}
+p.resources -= cost;
+p.buildQueue.push({ type: 'launcher', remaining: 10 }); // 10s build
+sendStateToAll();
 });
 
-// Tick loop
-setInterval(() => {
-  fleets.forEach(f => {
-    f.progress += 0.02; // adjust speed
-    if (f.progress >= 1) {
-      const dst = planets.find(p => p.id === f.to);
-      if (dst) {
-        dst.owner = f.owner;
-      }
-      f.done = true;
-    }
-  });
-  fleets = fleets.filter(f => !f.done);
-  io.emit('state', { planets, fleets, players });
-}, 50);
 
-server.listen(3000, () => console.log('Server running on http://localhost:3000'));
+socket.on('start_research', (key) => {
+const p = players[socket.id]; if (!p) return;
+if (!RESEARCH[key]) return;
+if (p.currentResearch) { socket.emit('error_msg', 'Déjà en recherche.'); return; }
+const time = RESEARCH[key].baseTime / (1 + (p.research[key]||0)*0.25); // faster with levels
+const cost = 150;
+if (p.resources < cost) { socket.emit('error_msg', 'Pas assez de ressources pour la recherche (150).'); return; }
+p.resources -= cost;
+p.currentResearch = { key, remaining: time };
+sendStateToAll();
+});
+
+
+socket.on('launch_rocket', ({ fromPlanetId, targetPlanetId }) => {
+const p = players[socket.id]; if (!p) return;
+if (p.launchers <= 0) { socket.emit('error_msg', 'Vous n\'avez pas de lanceur.'); return; }
+const from = PLANETS.find(pl=>pl.id===fromPlanetId);
+const to = PLANETS.find(pl=>pl.id===targetPlanetId);
+if (!from || !to) return;
+// cost/time depend on distance and research
+const d = distance(from, to);
+const baseDuration = Math.max(5, Math.round(d/100 * 20));
+const propulsionLevel = p.research.rocket_propulsion || 0;
+const duration = Math.max(3, baseDuration - propulsionLevel*2);
+const rocket = {
+id: 'R' + Date.now() + Math.floor(Math.random()*1000),
+owner: p.id,
+origin: from.id,
+target: to.id,
+startTime: Date.now(),
+duration: duration,
+progress: 0
+};
+rockets.push(rocket);
+sendStateToAll();
+});
+
+
+socket.on('disconnect', () => {
+console.log('disconnect', socket.id);
+delete players[socket.id];
+sendStateToAll();
+});
+});
+
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log('Server running on port', PORT));
