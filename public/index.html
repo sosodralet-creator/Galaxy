@@ -2,8 +2,8 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Soso Galaxy Conquest</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Soso Galaxy Conquest - Conquête Spatiale Multijoueur</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -32,7 +32,7 @@
       fontSize: '28px', color: '#00ff00'
     }).setOrigin(0.5);
 
-    socket.on('galaxy', (planets) => {
+    socket  socket.on('galaxy', (planets) => {
       this.children.removeAll();
 
       planets.forEach(p => {
