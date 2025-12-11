@@ -5,11 +5,9 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: { origin: '*' }
-});
+const io = socketIo(server, { cors: { origin: '*' } });
 
-// État du jeu en mémoire (se réinitialise au redémarrage)
+// État du jeu en mémoire
 let planets = [];
 
 // Génère 60 planètes au démarrage
@@ -32,29 +30,26 @@ function generateGalaxy() {
 }
 generateGalaxy();
 
-// Servir les fichiers statiques (frontend)
+// Servir les fichiers statiques
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Fallback pour toutes les routes → index.html (important pour éviter 404)
+// Fallback pour toutes les routes (évite le 404)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Socket.io - communication temps réel
+// Socket.io
 io.on('connection', (socket) => {
   console.log('🚀 Joueur connecté:', socket.id);
-
-  // Envoie la galaxie au nouveau joueur
   socket.emit('galaxy', planets);
 
-  // Conquête d'une planète
   socket.on('conquer', (planetId) => {
     const planet = planets.find(p => p.id === planetId);
     if (planet && planet.owner === 'neutre') {
       planet.owner = socket.id;
-      planet.army = Math.max(0, planet.army - 25); // Bataille simulée
+      planet.army = Math.max(0, planet.army - 25);
       console.log(`Planète ${planetId} conquise par ${socket.id}`);
-      io.emit('galaxy', planets); // Broadcast à tous
+      io.emit('galaxy', planets);
     }
   });
 
@@ -63,7 +58,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Tick toutes les 60 secondes : production de ressources
+// Tick ressources toutes les 60 secondes
 setInterval(() => {
   planets.forEach(p => {
     if (p.owner !== 'neutre') {
@@ -71,9 +66,11 @@ setInterval(() => {
       p.resources.energy += 7;
     }
   });
-  io.emit('galaxy', planets); // Met à jour tout le monde
+  io.emit('galaxy', planets);
   console.log('⏰ Tick ressources appliqué');
 }, 60000);
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🌟 Serveur lancé sur le port ${PORT}`);
+});
