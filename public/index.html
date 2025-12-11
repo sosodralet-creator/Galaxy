@@ -1,23 +1,55 @@
 <!DOCTYPE html>
-<html><head><title>Soso Galaxy Conquest</title>
-<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
-<script src="/socket.io/socket.io.js"></script>
-</head><body>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soso Galaxy Conquest</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { margin: 0; background: #000; overflow: hidden; }
+  </style>
+</head>
+<body>
 <script>
   const socket = io();
-  const config = { type: Phaser.AUTO, width: window.innerWidth, height: window.innerHeight, backgroundColor: '#000' };
+
+  const config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    backgroundColor: '#000011',
+    scene: { create }
+  };
   const game = new Phaser.Game(config);
-  game.scene.add('main', { create() {
-    this.add.text(100, 100, '🌌 SOSO GALAXY CONQUEST 🚀', { fontSize: '40px', color: '#fff' });
-    this.add.text(100, 200, 'En attente de la galaxie...', { fontSize: '30px', color: '#0f0' });
+
+  function create() {
+    this.add.text(window.innerWidth / 2, 80, 'SOSO GALAXY CONQUEST 🚀', {
+      fontSize: '48px', color: '#ffffff'
+    }).setOrigin(0.5);
+
+    this.add.text(window.innerWidth / 2, 140, 'Clique sur une planète verte pour la conquérir !', {
+      fontSize: '28px', color: '#00ff00'
+    }).setOrigin(0.5);
+
     socket.on('galaxy', (planets) => {
       this.children.removeAll();
-      this.add.text(100, 100, `Galaxie chargée : ${planets.length} planètes ! Clique pour conquérir`, { fontSize: '40px', color: '#fff' });
+
       planets.forEach(p => {
-        const circle = this.add.circle(p.x, p.y, 20, p.owner === 'neutre' ? 0x00ff00 : 0xff0000).setInteractive();
-        circle.on('pointerdown', () => socket.emit('conquer', p.id));
+        const color = p.owner === 'neutre' ? 0x00ff00 : 0xff0000;
+        const circle = this.add.circle(p.x, p.y, 25, color, 0.8)
+          .setStrokeStyle(3, 0xffffff)
+          .setInteractive({ cursor: 'pointer' })
+          .on('pointerdown', () => {
+            if (p.owner === 'neutre') socket.emit('conquer', p.id);
+          });
+
+        this.add.text(p.x - 60, p.y - 60, `ID: ${p.id}\nMétal: ${p.resources.metal}\nÉnergie: ${p.resources.energy}\nArmée: ${p.army}`, {
+          fontSize: '14px', color: '#ffffff', backgroundColor: '#000000aa', padding: { x: 8, y: 5 }
+        });
       });
     });
-  }}, true);
+  }
 </script>
-</body></html>
+</body>
+</html>
