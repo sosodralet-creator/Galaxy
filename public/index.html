@@ -1,88 +1,72 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Soso Galaxy — Prototype Stable</title>
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<!-- public/index.html -->
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SpaceConquest — Prototype</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
 <style>
-  body { margin:0; overflow:hidden; background:#000011; color:#0ff; font-family:monospace; }
-  #ui { position:absolute; top:10px; left:10px; background:rgba(0,0,30,0.7); padding:10px; border-radius:8px; z-index:10; }
-  button { margin:4px; padding:6px 10px; border-radius:6px; background:#002233; color:#0ff; border:1px solid #0ff; cursor:pointer; }
+:root{--bg:#0b1221;--panel:#0f1a2b;--accent:#6ec1ff}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue';background:linear-gradient(180deg,#03040a 0%,#071028 50%,#071a2b 100%);color:#d6e8ff}
+.app{display:grid;grid-template-columns:260px 1fr 300px;gap:14px;padding:14px;height:100vh;box-sizing:border-box}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(3,9,23,0.6)}
+h2{margin:6px 0 10px;font-size:16px}
+.countries button{display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);width:100%;color:inherit}
+.map{background:linear-gradient(180deg,#071936 0%,#051124 100%);border-radius:12px;padding:12px;position:relative;min-height:580px}
+.planet{position:absolute;border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#071a2b}
+.planet .label{position:absolute;top:56px;left:50%;transform:translateX(-50%);font-size:12px;color:#bfe6ff}
+.hud{display:flex;flex-direction:column;gap:8px}
+button.action{background:linear-gradient(90deg,var(--accent),#8de0ff);border:none;color:#03202f;padding:8px;border-radius:8px;cursor:pointer}
+.list{max-height:220px;overflow:auto}
+.small{font-size:12px;opacity:0.9}
+.row{display:flex;gap:8px;align-items:center}
+.rocket{width:18px;height:18px;border-radius:3px;background:#ffd;display:inline-block}
+.status{font-size:13px}
 </style>
 </head>
 <body>
-<div id="ui">
-  <div id="playerInfo">Connecté...</div>
-  <div>
-    <button onclick="build('mine')">Construire Mine</button>
-    <button onclick="build('power')">Construire Centrale</button>
-    <button onclick="build('shipyard')">Construire Chantier</button>
-  </div>
-  <div id="planetInfo"></div>
+<div class="app">
+<div class="card">
+<h2>Joueur</h2>
+<div>
+<div class="row"><input id="nameInput" placeholder="Votre nom" style="flex:1;padding:6px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit"/></div>
+<div style="height:8px"></div>
+<h2>Pays</h2>
+<div class="countries" id="countries"></div>
+<h2>Actions</h2>
+<div class="row"><button id="buildLauncher" class="action">Construire Lanceur (200)</button></div>
+<div style="height:8px"></div>
+<div class="row"><select id="researchSelect"></select><button id="startResearch" class="action">Lancer Recherche (150)</button></div>
+<div style="height:8px"></div>
+<h2 class="small">Etat</h2>
+<div id="playerInfo" class="small"></div>
 </div>
+</div>
+
+
+<div class="card map" id="map">
+<h2 style="color:#bfe6ff">Carte Système</h2>
+<div id="planetsLayer"></div>
+</div>
+
+
+<div class="card hud">
+<h2>Infos & Flotte</h2>
+<div class="small" id="playersList"></div>
+<h2>Rockets en vol</h2>
+<div id="rocketsList" class="list small"></div>
+<h2>Notifications</h2>
+<div id="notifications" class="small"></div>
+</div>
+</div>
+
+
 <script>
 const socket = io();
-let state = { planets: [], fleets: [], players: {} };
-let selectedPlanet = null;
+let localPlayer = null;
+let countries = [];
+let researchDefs = {};
+let state = null;
 
-const config = {
-  type: Phaser.AUTO,
-  width: window.innerWidth,
-  height: window.innerHeight,
-  backgroundColor: '#000011',
-  scene: { preload, create, update }
-};
-let sceneRef;
-const game = new Phaser.Game(config);
 
-function preload(){
-  this.load.image('planet', 'https://i.imgur.com/4AiXzf8.png');
-  this.load.image('ship', 'https://i.imgur.com/3b8zXjP.png');
-}
-
-function create(){
-  sceneRef = this;
-  this.input.mouse.disableContextMenu();
-
-  this.input.on('pointerdown', pointer => {
-    const clicked = state.planets.find(p => Math.hypot(p.x-pointer.x, p.y-pointer.y)<30);
-    if(clicked) selectedPlanet = clicked.id;
-  });
-}
-
-function update(){
-  if(!sceneRef) return;
-  sceneRef.children.removeAll();
-
-  state.planets.forEach(p => {
-    const sprite = sceneRef.add.image(p.x, p.y, 'planet').setScale(0.2);
-    if(p.id === selectedPlanet) sceneRef.add.circle(p.x, p.y, 35, 0x00ffff,0.3);
-    sceneRef.add.text(p.x-20,p.y+30,p.name+'\nM:'+p.resources.metal+'\nE:'+p.resources.energy,{color:'#0ff',fontSize:'12px'});
-  });
-
-  state.fleets.forEach(f => {
-    const from = state.planets.find(p=>p.id===f.from);
-    const to = state.planets.find(p=>p.id===f.to);
-    if(!from||!to) return;
-    const x = from.x + (to.x-from.x)*f.progress;
-    const y = from.y + (to.y-from.y)*f.progress;
-    sceneRef.add.image(x,y,'ship').setScale(0.1).setAngle(Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI);
-  });
-
-  // update planet info panel
-  const infoDiv = document.getElementById('planetInfo');
-  const sel = state.planets.find(p=>p.id===selectedPlanet);
-  if(sel) infoDiv.innerText = `Sélectionné: ${sel.name}\nM: ${sel.resources.metal}, E: ${sel.resources.energy}`;
-  else infoDiv.innerText = '';
-}
-
-socket.on('state', s => { state = s; const me = Object.values(s.players).find(p=>p.planetId); if(me) document.getElementById('playerInfo').innerText='Planète assignée: '+me.planetId; });
-
-function build(type){
-  if(!selectedPlanet) return alert('Sélectionne une planète');
-  socket.emit('build',{planetId:selectedPlanet, building:type});
-}
-</script>
-</body>
-</html>
+const nameInput = document.getElementById('nameInput');
+const countriesDiv = document.getElementById('countries');
+const researchSelect = document.getElementById('researchSelect');
+const buildLauncherBtn = document.getElementById('buildLa
