@@ -2,19 +2,90 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Soso Galaxy Conquest - Conquête Spatiale Multijoueur</title>
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soso Galaxy Conquest V2</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { margin: 0; background: #000; overflow: hidden; }
+    body { margin: 0; background: #000; color: white; font-family: Arial; overflow: hidden; }
+    #loginScreen, #empireChoice, #gameUI { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+    input, button, select { margin: 10px; padding: 10px; font-size: 18px; }
+    button { cursor: pointer; background: #0066ff; color: white; border: none; border-radius: 5px; }
   </style>
 </head>
 <body>
+<div id="loginScreen">
+  <h1>Soso Galaxy Conquest</h1>
+  <input type="text" id="username" placeholder="Pseudo">
+  <input type="password" id="password" placeholder="Mot de passe">
+  <button onclick="register()">S'inscrire</button>
+  <button onclick="login()">Se connecter</button>
+</div>
+
+<div id="empireChoice" style="display:none">
+  <h1>Choisis ton empire</h1>
+  <select id="empire">
+    <option value="France">France 🇫🇷</option>
+    <option value="USA">USA 🇺🇸</option>
+    <option value="Chine">Chine 🇨🇳</option>
+    <option value="Russie">Russie 🇷🇺</option>
+    <option value="Japon">Japon 🇯🇵</option>
+    <option value="Allemagne">Allemagne 🇩🇪</option>
+    <option value="Brésil">Brésil 🇧🇷</option>
+    <option value="Inde">Inde 🇮🇳</option>
+  </select>
+  <button onclick="startGame()">Lancer l'aventure</button>
+</div>
+
+<div id="gameUI" style="display:none">
+  <h2>Bienvenue, Empereur <span id="playerName"></span></h2>
+  <p>Tutoriel : Construis des mines et centrales sur Terre, puis un labo pour la recherche "Voyage Spatial". Après, tu pourras explorer et conquérir !</p>
+  <button onclick="buildOnEarth('mine')">+ Mine (sur Terre)</button>
+  <button onclick="buildOnEarth('power')">+ Centrale</button>
+  <button onclick="buildOnEarth('lab')">+ Labo</button>
+  <button onclick="buildOnEarth('shipyard')">+ Chantier spatial</button>
+</div>
+
 <script>
   const socket = io();
+  let playerData = null;
 
+  function register() {
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const empire = document.getElementById('empire').value || "France";
+    socket.emit('register', { username, password, empire, color: '#ff0000' });
+  }
+
+  function login() {
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    socket.emit('login', { username, password });
+  }
+
+  socket.on('loginSuccess', (data) => {
+    playerData = data;
+    document.getElementById('playerName').textContent = data.username + " de " + data.empire;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('empireChoice').style.display = 'none';
+    document.getElementById('gameUI').style.display = 'block';
+    socket.emit('playerReady', playerData);
+  });
+
+  socket.on('registerFail', (msg) => alert(msg));
+  socket.on('loginFail', (msg) => alert(msg));
+
+  function startGame() {
+    document.getElementById('empireChoice').style.display = 'none';
+    document.getElementById('gameUI').style.display = 'block';
+    register(); // Auto-register après choix empire
+  }
+
+  function buildOnEarth(building) {
+    socket.emit('build', { planetId: 0, building });
+  }
+
+  // Phaser scene
   const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
@@ -25,30 +96,12 @@
   const game = new Phaser.Game(config);
 
   function create() {
-    this.add.text(window.innerWidth / 2, 80, 'SOSO GALAXY CONQUEST 🚀', {
-      fontSize: '48px', color: '#ffffff'
-    }).setOrigin(0.5);
-
-    this.add.text(window.innerWidth / 2, 140, 'Clique sur une planète verte pour la conquérir !', {
-      fontSize: '28px', color: '#00ff00'
-    }).setOrigin(0.5);
-
-    // <-- Ligne corrigée : un seul "socket.on"
-    socket.on('galaxy', (planets) => {
+    socket.on('galaxyUpdate', (planets) => {
       this.children.removeAll();
-
       planets.forEach(p => {
-        const color = p.owner === 'neutre' ? 0x00ff00 : 0xff0000;
-        const circle = this.add.circle(p.x, p.y, 25, color, 0.8)
-          .setStrokeStyle(3, 0xffffff)
-          .setInteractive({ cursor: 'pointer' })
-          .on('pointerdown', () => {
-            if (p.owner === 'neutre') socket.emit('conquer', p.id);
-          });
-
-        this.add.text(p.x - 60, p.y - 60, `ID: ${p.id}\nMétal: ${p.resources.metal}\nÉnergie: ${p.resources.energy}\nArmée: ${p.army}`, {
-          fontSize: '14px', color: '#ffffff', backgroundColor: '#000000aa', padding: { x: 8, y: 5 }
-        });
+        const color = p.owner === 'neutre' ? 0x888888 : (p.isHome ? 0x00ff00 : 0xff0000);
+        this.add.circle(p.x, p.y, p.isHome ? 40 : 25, color, 0.8).setStrokeStyle(4, 0xffffff);
+        this.add.text(p.x - 80, p.y - 40, p.name || `Planète ${p.id}`, { fontSize: '16px', color: '#ffffff' });
       });
     });
   }
