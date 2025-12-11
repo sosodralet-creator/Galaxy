@@ -1,100 +1,247 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Soso Galaxy Conquest V4 - L'Empire des Étoiles</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Soso Galaxy Conquest V7</title>
+
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
+
   <style>
-    body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; color: #00ffff; }
-    #ui { position: absolute; top: 20px; left: 20px; background: rgba(0, 20, 40, 0.8); padding: 20px; border: 2px solid #00ffff; border-radius: 15px; z-index: 10; box-shadow: 0 0 20px #00ffff; }
-    button { background: #001122; color: #00ffff; border: 1px solid #00ffff; padding: 12px; margin: 8px; border-radius: 8px; cursor: pointer; box-shadow: 0 0 10px #00ffff; }
-    button:hover { background: #003366; box-shadow: 0 0 20px #00ffff; }
-    h1 { text-shadow: 0 0 10px #00ffff; }
+    body { margin:0; overflow:hidden; background:#000011; font-family: Arial, sans-serif; color:#0ff; }
+    #ui {
+      position:absolute; left:12px; top:12px; z-index:50; background:rgba(0,6,10,0.7);
+      border:2px solid #00e6ff; padding:12px; border-radius:10px; width:340px;
+      box-shadow:0 6px 20px rgba(0,230,255,0.06);
+    }
+    .btn{ background:#001022; color:#0ff; border:1px solid #0ff; padding:8px 10px; border-radius:6px; cursor:pointer; margin:4px; display:inline-block;}
+    .small{ font-size:13px; color:#bff; }
+    #chat{ margin-top:8px; height:80px; overflow:auto; background:rgba(0,0,0,0.3); padding:6px; border-radius:6px; }
+    #units { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+    .unit-card { background:rgba(0,10,15,0.6); padding:6px; border-radius:6px; border:1px solid rgba(0,255,255,0.08); width:100px; text-align:center; }
   </style>
 </head>
 <body>
-<div id="ui">
-  <h1>SOSO GALAXY CONQUEST</h1>
-  <p>Empereur, construis ton empire depuis la Terre !</p>
-  <div>
-    <button onclick="build('mine')">Construire Mine Métal</button>
-    <button onclick="build('power')">Construire Centrale</button>
-    <button onclick="build('lab')">Construire Labo Recherche</button>
-    <button onclick="build('shipyard')">Construire Chantier Spatial</button>
+  <div id="ui">
+    <h3>Soso Galaxy V7</h3>
+    <div class="small">Sélection: <span id="sel">Aucune</span></div>
+    <div style="margin-top:8px;">
+      <button class="btn" id="btn-recruit">Recruter</button>
+      <button class="btn" id="btn-compose">Composer Flotte</button>
+      <button class="btn" id="btn-build">Construire</button>
+    </div>
+    <div id="units" class="small"></div>
+    <div id="chat"></div>
   </div>
-  <p>Clic gauche sur ta planète → Clic droit sur cible pour envoyer flotte !</p>
-</div>
 
 <script>
-  const socket = io();
-  let selectedPlanet = null;
+const socket = io();
+let planets = [], fleets = [];
+let selectedPlanetId = null;
+let sceneRef = null;
+let sprites = { planets: {}, fleets: {} };
 
-  const config = {
-    type: Phaser.AUTO,
-    width: window.innerWidth,
-    height: window.innerHeight,
-    backgroundColor: '#000022',
-    scene: { preload, create, update }
-  };
-  const game = new Phaser.Game(config);
+/* PHASER CONFIG */
+const config = {
+  type: Phaser.AUTO,
+  width: window.innerWidth,
+  height: window.innerHeight,
+  backgroundColor: '#000012',
+  scene: { preload, create, update }
+};
+const game = new Phaser.Game(config);
 
-  function preload() {
-    this.load.image('bg', 'https://images.unsplash.com/photo-1464802686295-074a3d5b9849?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'); // Fond galaxie épique
-    this.load.image('earth', 'https://thumbs.dreamstime.com/b/earth-illustration-d-closer-to-real-rendered-high-quality-edited-photoshop-textures-optimal-render-settigns-34882755.jpg'); // Terre réaliste
-    this.load.image('planet', 'https://wallpapercave.com/wp/wp1812778.jpg'); // Planètes alien
-    this.load.image('ship', 'https://i.imgur.com/3b8zXjP.png'); // Vaisseau sci-fi
-  }
+/* LOAD */
+function preload(){
+  this.load.image('bg','https://images.unsplash.com/photo-1464802686295-074a3d5b9849?auto=format&fit=crop&w=1920&q=80');
+  this.load.image('planet','https://i.imgur.com/9z7sK7v.png');
+  this.load.image('earth','https://i.imgur.com/6X4xQbH.png');
+  this.load.image('ship','https://i.imgur.com/3b8zXjP.png');
+  this.load.image('flare','https://i.imgur.com/TKp6m6k.png');
+  this.load.audio('sfx-laser','https://freesound.org/data/previews/341/341695_62473-lq.mp3'); // might 404 in offline env - tolerated
+  this.load.audio('sfx-explosion','https://freesound.org/data/previews/341/341695_62473-lq.mp3');
+}
 
-  function create() {
-    this.add.image(960, 540, 'bg').setDepth(-1).setScale(1.2);
+/* CREATE */
+function create(){
+  sceneRef = this;
+  this.add.image(config.width/2, config.height/2, 'bg').setDepth(-2).setScale(1.6).setAlpha(0.5);
+  this.input.mouse.disableContextMenu();
 
-    this.input.mouse.disableContextMenu();
+  socket.on('galaxyUpdate', data => {
+    planets = data.planets; fleets = data.fleets;
+    redraw(sceneRef);
+    updateUI();
+  });
 
-    socket.on('galaxyUpdate', (data) => {
-      this.children.list.filter(obj => obj.type !== 'Image' || obj.texture.key !== 'bg').forEach(obj => obj.destroy());
+  socket.on('battleResult', o => {
+    // play explosion and highlight
+    const targ = planets.find(p=>p.id===o.fleet.to);
+    if(targ) localizedExplosion(sceneRef, targ.x, targ.y);
+    appendChat('Bataille: ' + (o.result.winner === 'attacker' ? 'Attaquant victorieux' : 'Défenseur tient'));
+  });
 
-      data.planets.forEach(p => {
-        const img = p.isHome ? 'earth' : 'planet';
-        const planet = this.add.image(p.x, p.y, img).setScale(p.isHome ? 0.3 : 0.15).setInteractive();
-        planet.on('pointerdown', () => {
-          selectedPlanet = p.id;
-          console.log('Planète sélectionnée : ' + p.name);
-        });
-        planet.on('pointerover', () => planet.setTint(0x00ffff));
-        planet.on('pointerout', () => planet.clearTint());
-
-        this.add.text(p.x - 100, p.y + (p.isHome ? 100 : 60), p.name + '\nMétal: ' + p.resources.metal + '\nÉnergie: ' + p.resources.energy, { color: '#00ffff', fontSize: '16px', backgroundColor: '#00000088' });
-      });
-
-      data.fleets.forEach(f => {
-        const from = data.planets.find(p => p.id === f.from);
-        const to = data.planets.find(p => p.id === f.to);
-        if (from && to) {
-          const x = from.x + (to.x - from.x) * (f.progress / 100);
-          const y = from.y + (to.y - from.y) * (f.progress / 100);
-          this.add.image(x, y, 'ship').setScale(0.1).setAngle(Phaser.Math.RadToDeg(Math.atan2(to.y - from.y, to.x - from.x)));
-        }
-      });
-    });
-
-    this.input.on('pointerdown', (pointer) => {
-      if (pointer.rightButtonDown() && selectedPlanet !== null) {
-        const target = data.planets.find(p => Phaser.Math.Distance.Between(pointer.worldX, pointer.worldY, p.x, p.y) < 100);
-        if (target && target.id !== selectedPlanet) {
-          socket.emit('sendFleet', { from: selectedPlanet, to: target.id });
-          selectedPlanet = null;
-        }
+  // pointer controls: select left, right to attack (open compose modal)
+  this.input.on('pointerdown', pointer => {
+    if(pointer.leftButtonDown()){
+      // find planet under cursor
+      const found = planets.find(p => Phaser.Math.Distance.Between(pointer.worldX, pointer.worldY, p.x, p.y) < 80);
+      if(found){ selectedPlanetId = found.id; document.getElementById('sel').innerText = found.name + ' ('+found.id+')'; updateUI(); }
+    }
+    if(pointer.rightButtonDown()){
+      const target = planets.find(p => Phaser.Math.Distance.Between(pointer.worldX, pointer.worldY, p.x, p.y) < 80);
+      if(target && selectedPlanetId !== null && target.id !== selectedPlanetId){
+        // quick default send (half of each unit)
+        const from = planets.find(p=>p.id===selectedPlanetId);
+        if(!from || from.owner === undefined) { appendChat('Sélectionne une planète que tu possèdes.'); return; }
+        const comp = {};
+        for(const t in from.army){ comp[t] = Math.floor((from.army[t]||0) * 0.5); }
+        socket.emit('sendFleet',{ from: selectedPlanetId, to: target.id, composition: comp, ability: null });
+        appendChat('Flotte envoyée vers ' + target.name);
       }
+    }
+  });
+
+  // UI handlers
+  document.getElementById('btn-recruit').onclick = () => {
+    if(selectedPlanetId === null){ alert('Sélectionne une planète'); return; }
+    const unit = prompt('Type d\\'unité (fighter/frigate/destroyer/cruiser/transport):', 'fighter');
+    const qty = parseInt(prompt('Quantité:', '10')) || 0;
+    if(unit && qty>0) socket.emit('recruit',{ planetId: selectedPlanetId, unit, qty });
+  };
+
+  document.getElementById('btn-compose').onclick = () => {
+    if(selectedPlanetId === null){ alert('Sélectionne une planète'); return; }
+    composeFleetModal();
+  };
+
+  document.getElementById('btn-build').onclick = () => {
+    if(selectedPlanetId === null){ alert('Sélectionne une planète'); return; }
+    const b = prompt('Construction (mine/power/lab/shipyard/turret):','mine');
+    if(b) socket.emit('build',{ planetId: selectedPlanetId, building: b });
+  };
+
+  appendChat('Connected. Use left click to select, right click to quick-attack.');
+}
+
+/* UPDATE */
+function update(){}
+
+/* REDRAW */
+function redraw(scene){
+  // clear previous visuals except background
+  scene.children.list.filter(c => c.texture && c.texture.key !== 'bg').forEach(ch => ch.destroy());
+
+  // draw planets
+  planets.forEach(p => {
+    const key = p.isHome ? 'earth' : 'planet';
+    const spr = scene.add.image(p.x, p.y, key).setScale(p.isHome ? 0.32 : 0.14).setInteractive();
+    if(p.owner) {
+      // tint owner's color (simple hash)
+      const col = colorFromId(p.owner);
+      spr.setTint(col);
+    }
+    // selection ring
+    if(selectedPlanetId === p.id){
+      const ring = scene.add.circle(p.x, p.y, p.isHome?70:50).setStrokeStyle(2, 0x00ffff).setAlpha(0.6);
+      scene.tweens.add({ targets: ring, alpha:0.15, yoyo:true, loop:-1, duration:800 });
+    }
+    // label
+    const label = `${p.name} (ID:${p.id})\nM:${Math.floor(p.resources.metal)} E:${Math.floor(p.resources.energy)}\nArm:${p.armyTotal||Object.values(p.army||{}).reduce((a,b)=>a+b,0)}`;
+    scene.add.text(p.x - (p.isHome?90:70), p.y + (p.isHome?120:70), label, { color:'#00ffff', fontSize:'12px', backgroundColor:'#001018aa', padding:4 }).setDepth(5);
+  });
+
+  // draw fleets
+  fleets.forEach(f => {
+    const from = planets.find(p=>p.id===f.from);
+    const to = planets.find(p=>p.id===f.to);
+    if(!from || !to) return;
+    const t = Math.min(1, (Date.now() - f.startTime) / f.travelTimeMs);
+    const x = from.x + (to.x - from.x) * t;
+    const y = from.y + (to.y - from.y) * t;
+    const ship = scene.add.image(x,y,'ship').setScale(0.08).setAngle(Phaser.Math.RadToDeg(Math.atan2(to.y-from.y,to.x-from.x)));
+    // color by owner
+    if(f.owner && f.owner !== 'pirate') ship.setTint(colorFromId(f.owner));
+    if(f.owner === 'pirate') ship.setTint(0xff6600);
+    // particles
+    const particles = scene.add.particles('flare');
+    particles.createEmitter({ follow: ship, speed: {min:6,max:30}, lifespan: 300, quantity: 1, scale: {start:0.2, end: 0}, blendMode: 'ADD' });
+    // simple pulsing if resolving
+    if(f.status === 'resolving' || f.status === 'done'){
+      localizedExplosion(scene, to.x, to.y);
+    }
+  });
+}
+
+/* UI / CHAT */
+function appendChat(msg){
+  const chat = document.getElementById('chat');
+  const el = document.createElement('div'); el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  chat.prepend(el);
+}
+
+/* Compose Fleet Modal (prompt-based quick UI) */
+function composeFleetModal(){
+  const from = planets.find(p=>p.id===selectedPlanetId);
+  if(!from) return;
+  // build composition by asking quantities
+  const comp = {};
+  for(const t in from.army){
+    const max = from.army[t] || 0;
+    if(max <= 0) continue;
+    const v = parseInt(prompt(`Combien d'unités ${t} envoyer ? (max ${max})`, Math.floor(max/3))) || 0;
+    comp[t] = Math.min(max, Math.max(0, v));
+  }
+  const targetId = parseInt(prompt('ID de la planète cible ?', '1'));
+  if(isNaN(targetId)){ alert('ID invalide'); return; }
+  const ability = prompt('Capacité spéciale (overload / none) :','none');
+  socket.emit('sendFleet', { from: selectedPlanetId, to: targetId, composition: comp, ability: ability === 'none' ? null : ability });
+  appendChat('Flotte composée envoyée.');
+}
+
+/* FX: localized explosion */
+function localizedExplosion(scene, x, y){
+  const e = scene.add.circle(x, y, 6, 0xff6600).setAlpha(1);
+  scene.tweens.add({ targets: e, radius: 40, alpha: 0, duration: 420, ease: 'Cubic.easeOut', onComplete: ()=>e.destroy() });
+  // quick laser arcs
+  for(let i=0;i<6;i++){
+    scene.time.delayedCall(i*40, ()=> {
+      const angle = Math.random()*Math.PI*2;
+      const lx = x + Math.cos(angle)* (20 + Math.random()*40);
+      const ly = y + Math.sin(angle)* (20 + Math.random()*40);
+      const line = scene.add.line(0,0,x,y,lx,ly,0xff0044).setLineWidth(2).setAlpha(0.95);
+      scene.tweens.add({ targets: line, alpha: 0, duration: 160, onComplete: ()=>line.destroy() });
     });
   }
+}
 
-  function update() {}
+/* Utility color from id (hash) */
+function colorFromId(id){
+  if(!id) return 0xffffff;
+  let h = 0;
+  for(let i=0;i<id.length;i++) h = (h<<5) - h + id.charCodeAt(i);
+  const r = (h>>0) & 255, g = (h>>8) & 255, b = (h>>16) & 255;
+  return (r<<16) + (g<<8) + b;
+}
 
-  function build(type) {
-    socket.emit('build', { planetId: 0, building: type });
+/* updateUI: show units of selected planet */
+function updateUI(){
+  const container = document.getElementById('units');
+  container.innerHTML = '';
+  const p = planets.find(x=>x.id===selectedPlanetId);
+  if(!p) { container.innerHTML = '<div class="small">Sélectionne une planète.</div>'; return; }
+  for(const t in p.army){
+    const c = document.createElement('div'); c.className='unit-card';
+    c.innerHTML = `<strong>${t}</strong><br/>${p.army[t]||0}`;
+    container.appendChild(c);
   }
+}
+
+/* initial placeholder */
+document.getElementById('units').innerHTML = '<div class="small">Chargement...</div>';
+appendChat('Bienvenue, Empereur — prépare tes flottes !');
+
 </script>
 </body>
 </html>
