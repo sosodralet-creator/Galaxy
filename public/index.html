@@ -3,108 +3,81 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Soso Galaxy Conquest V2</title>
+  <title>Soso Galaxy Conquest V3 - L'Empire Spatial</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { margin: 0; background: #000; color: white; font-family: Arial; overflow: hidden; }
-    #loginScreen, #empireChoice, #gameUI { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
-    input, button, select { margin: 10px; padding: 10px; font-size: 18px; }
-    button { cursor: pointer; background: #0066ff; color: white; border: none; border-radius: 5px; }
+    body { margin: 0; overflow: hidden; font-family: 'Orbitron', sans-serif; }
+    #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,50,0.8); padding: 20px; border-radius: 10px; color: white; z-index: 10; }
+    button { background: #00ffff; color: black; border: none; padding: 10px; margin: 5px; border-radius: 5px; cursor: pointer; }
+    button:hover { background: #00cccc; }
   </style>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
 </head>
 <body>
-<div id="loginScreen">
-  <h1>Soso Galaxy Conquest</h1>
-  <input type="text" id="username" placeholder="Pseudo">
-  <input type="password" id="password" placeholder="Mot de passe">
-  <button onclick="register()">S'inscrire</button>
-  <button onclick="login()">Se connecter</button>
-</div>
-
-<div id="empireChoice" style="display:none">
-  <h1>Choisis ton empire</h1>
-  <select id="empire">
-    <option value="France">France 🇫🇷</option>
-    <option value="USA">USA 🇺🇸</option>
-    <option value="Chine">Chine 🇨🇳</option>
-    <option value="Russie">Russie 🇷🇺</option>
-    <option value="Japon">Japon 🇯🇵</option>
-    <option value="Allemagne">Allemagne 🇩🇪</option>
-    <option value="Brésil">Brésil 🇧🇷</option>
-    <option value="Inde">Inde 🇮🇳</option>
-  </select>
-  <button onclick="startGame()">Lancer l'aventure</button>
-</div>
-
-<div id="gameUI" style="display:none">
-  <h2>Bienvenue, Empereur <span id="playerName"></span></h2>
-  <p>Tutoriel : Construis des mines et centrales sur Terre, puis un labo pour la recherche "Voyage Spatial". Après, tu pourras explorer et conquérir !</p>
-  <button onclick="buildOnEarth('mine')">+ Mine (sur Terre)</button>
-  <button onclick="buildOnEarth('power')">+ Centrale</button>
-  <button onclick="buildOnEarth('lab')">+ Labo</button>
-  <button onclick="buildOnEarth('shipyard')">+ Chantier spatial</button>
+<div id="ui">
+  <h1>SOSO GALAXY CONQUEST</h1>
+  <p>Tutoriel : Construis sur Terre → Recherche Voyage Spatial → Envoie des flottes pour conquérir !</p>
+  <div id="terreControls">
+    <button onclick="build('mine')">+ Mine Métal</button>
+    <button onclick="build('power')">+ Centrale Énergie</button>
+    <button onclick="build('lab')">+ Labo Recherche</button>
+    <button onclick="build('shipyard')">+ Chantier Spatial</button>
+  </div>
 </div>
 
 <script>
   const socket = io();
-  let playerData = null;
+  let selectedPlanet = 0;
 
-  function register() {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const empire = document.getElementById('empire').value || "France";
-    socket.emit('register', { username, password, empire, color: '#ff0000' });
-  }
-
-  function login() {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    socket.emit('login', { username, password });
-  }
-
-  socket.on('loginSuccess', (data) => {
-    playerData = data;
-    document.getElementById('playerName').textContent = data.username + " de " + data.empire;
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('empireChoice').style.display = 'none';
-    document.getElementById('gameUI').style.display = 'block';
-    socket.emit('playerReady', playerData);
-  });
-
-  socket.on('registerFail', (msg) => alert(msg));
-  socket.on('loginFail', (msg) => alert(msg));
-
-  function startGame() {
-    document.getElementById('empireChoice').style.display = 'none';
-    document.getElementById('gameUI').style.display = 'block';
-    register(); // Auto-register après choix empire
-  }
-
-  function buildOnEarth(building) {
-    socket.emit('build', { planetId: 0, building });
-  }
-
-  // Phaser scene
   const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
     height: window.innerHeight,
-    backgroundColor: '#000011',
-    scene: { create }
+    backgroundColor: '#000022',
+    scene: { preload, create, update }
   };
   const game = new Phaser.Game(config);
 
+  function preload() {
+    this.load.image('background', 'https://images.unsplash.com/photo-1462332420958-a05d1e145a55?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'); // Fond galaxie HD
+    this.load.image('earth', 'https://www.sciencealert.com/images/2021-03/processed/EarthFromSpace_1024.jpg'); // Terre stylée
+    this.load.image('alienPlanet', 'https://wallpapercave.com/wp/wp1812778.jpg'); // Planètes alien
+    this.load.image('ship', 'https://i.imgur.com/O2W5Z3f.png'); // Vaisseau simple
+  }
+
   function create() {
-    socket.on('galaxyUpdate', (planets) => {
-      this.children.removeAll();
-      planets.forEach(p => {
-        const color = p.owner === 'neutre' ? 0x888888 : (p.isHome ? 0x00ff00 : 0xff0000);
-        this.add.circle(p.x, p.y, p.isHome ? 40 : 25, color, 0.8).setStrokeStyle(4, 0xffffff);
-        this.add.text(p.x - 80, p.y - 40, p.name || `Planète ${p.id}`, { fontSize: '16px', color: '#ffffff' });
+    this.add.image(960, 540, 'background').setDepth(-1).setScale(1.5);
+
+    socket.on('galaxyUpdate', (data) => {
+      this.children.removeAll(p => p.type !== 'Image' || p.texture.key !== 'background'); // Garde fond
+
+      data.planets.forEach(p => {
+        const img = p.isHome ? 'earth' : 'alienPlanet';
+        const planet = this.add.image(p.x, p.y, img).setInteractive().setScale(0.2);
+        planet.on('pointerdown', () => selectedPlanet = p.id);
+
+        this.add.text(p.x - 100, p.y - 100, p.name, { color: '#00ffff', fontSize: '20px' });
+      });
+
+      data.fleets.forEach(f => {
+        const from = data.planets.find(p => p.id === f.from);
+        const to = data.planets.find(p => p.id === f.to);
+        if (from && to) {
+          const ship = this.add.image(from.x + (to.x - from.x) * (f.progress / 100), from.y + (to.y - from.y) * (f.progress / 100), 'ship').setScale(0.1);
+        }
       });
     });
   }
+
+  function update() {}
+
+  function build(type) {
+    socket.emit('build', { planetId: 0, building: type });
+  }
+
+  // Envoi flotte (clic droit ou bouton futur)
+  document.addEventListener('contextmenu', e => e.preventDefault());
 </script>
 </body>
 </html>
