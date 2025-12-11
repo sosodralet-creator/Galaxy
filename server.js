@@ -7,10 +7,10 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: '*' } });
 
-// État du jeu en mémoire
+// État du jeu
 let planets = [];
 
-// Génère 60 planètes au démarrage
+// Génère 60 planètes
 function generateGalaxy() {
   planets = [];
   for (let i = 0; i < 60; i++) {
@@ -30,15 +30,24 @@ function generateGalaxy() {
 }
 generateGalaxy();
 
-// Servir les fichiers statiques
-app.use(express.static(path.join(__dirname, 'public')));
+// Servir les fichiers statiques avec cache (performance)
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1y', // Cache 1 an pour Phaser et assets statiques
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
 
-// Fallback pour toutes les routes (évite le 404)
+// Pas de header 'server' ajouté (Express n'en met pas par défaut)
+
+// Fallback pour éviter 404
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Socket.io
+// Socket.io (inchangé)
 io.on('connection', (socket) => {
   console.log('🚀 Joueur connecté:', socket.id);
   socket.emit('galaxy', planets);
@@ -58,7 +67,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Tick ressources toutes les 60 secondes
+// Tick ressources
 setInterval(() => {
   planets.forEach(p => {
     if (p.owner !== 'neutre') {
