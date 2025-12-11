@@ -5,55 +5,56 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, { cors: { origin: '*' } });
+const io = socketIo(server, {
+  cors: { origin: '*' }
+});
 
-// === État du jeu en mémoire (se réinitialise au redémarrage) ===
+// État du jeu en mémoire (se réinitialise au redémarrage)
 let planets = [];
 
-// Génère 50 planètes au démarrage
+// Génère 60 planètes au démarrage
 function generateGalaxy() {
   planets = [];
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 60; i++) {
     planets.push({
       id: i,
       x: Math.random() * 1800 + 100,
       y: Math.random() * 1800 + 100,
       owner: 'neutre',
       resources: {
-        metal: Math.floor(500 + Math.random() * 1000),
-        energy: Math.floor(200 + Math.random() * 600)
+        metal: Math.floor(400 + Math.random() * 1200),
+        energy: Math.floor(150 + Math.random() * 700)
       },
-      army: Math.floor(20 + Math.random() * 80)
+      army: Math.floor(15 + Math.random() * 100)
     });
   }
-  console.log('🌌 Galaxie générée avec 50 planètes !');
+  console.log('🌌 Galaxie générée avec 60 planètes !');
 }
 generateGalaxy();
 
-// Servir les fichiers statiques (le frontend Phaser)
+// Servir les fichiers statiques (frontend)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Route racine au cas où
-app.get('/', (req, res) => {
+// Fallback pour toutes les routes → index.html (important pour éviter 404)
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// === Socket.io : communication en temps réel ===
+// Socket.io - communication temps réel
 io.on('connection', (socket) => {
   console.log('🚀 Joueur connecté:', socket.id);
 
-  // Envoie la galaxie actuelle au nouveau joueur
+  // Envoie la galaxie au nouveau joueur
   socket.emit('galaxy', planets);
 
-  // Réception d'une conquête
+  // Conquête d'une planète
   socket.on('conquer', (planetId) => {
     const planet = planets.find(p => p.id === planetId);
-    if (planet) {
-      planet.owner = socket.id; // Ou un pseudo plus tard
-      planet.army = Math.max(0, planet.army - 20); // Simule une bataille
+    if (planet && planet.owner === 'neutre') {
+      planet.owner = socket.id;
+      planet.army = Math.max(0, planet.army - 25); // Bataille simulée
       console.log(`Planète ${planetId} conquise par ${socket.id}`);
-      // Broadcast à tous les joueurs
-      io.emit('galaxy', planets);
+      io.emit('galaxy', planets); // Broadcast à tous
     }
   });
 
@@ -62,19 +63,17 @@ io.on('connection', (socket) => {
   });
 });
 
-// Tick toutes les 60 secondes : production de ressources pour les planètes possédées
+// Tick toutes les 60 secondes : production de ressources
 setInterval(() => {
   planets.forEach(p => {
     if (p.owner !== 'neutre') {
-      p.resources.metal += 10;
-      p.resources.energy += 5;
+      p.resources.metal += 12;
+      p.resources.energy += 7;
     }
   });
-  io.emit('tick', planets); // Optionnel : envoie l'état mis à jour
+  io.emit('galaxy', planets); // Met à jour tout le monde
+  console.log('⏰ Tick ressources appliqué');
 }, 60000);
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌟 Serveur lancé sur le port ${PORT}`);
-  console.log(`Ouvre ton lien : https://soso-galaxy-conquest-6bvadn.api.dokploy.com`);
-});
+server.listen(PORT, '0
