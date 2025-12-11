@@ -1,7 +1,7 @@
 {
   "name": "soso-galaxy-conquest",
-  "version": "1.0.0",
-  "description": "Conquête spatiale",
+  "version": "2.0.0",
+  "description": "Conquête spatiale épique - V2 avec comptes et départ sur Terre",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,6 +9,6 @@
   "dependencies": {
     "express": "^4.19.2",
     "socket.io": "^4.7.5",
-    "mongoose": "^8.5.1"
+    "bcrypt": "^5.1.1"
   }
 }
