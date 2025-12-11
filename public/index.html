@@ -1,295 +1,88 @@
-<!doctype html>
-<html lang="fr">
+<!DOCTYPE html>
+<html>
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Soso Galaxy — Ultimate</title>
-
+<meta charset="utf-8">
+<title>Soso Galaxy — Prototype Stable</title>
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
-
 <style>
-  body { margin:0; background:#000010; color:#0ff; font-family:Arial,Helvetica,sans-serif; overflow:hidden; }
-  #ui { position:absolute; left:12px; top:12px; width:360px; background:rgba(0,6,10,0.75); border:2px solid #00e6ff; padding:12px; border-radius:10px; z-index:40; }
-  .btn{ display:inline-block; padding:6px 8px; margin:4px; background:#002233; color:#0ff; border-radius:6px; cursor:pointer; border:1px solid #00e6ff; }
-  #minimap { position:absolute; right:12px; top:12px; width:220px; height:140px; background:rgba(0,0,0,0.35); border:1px solid #004455; padding:6px; border-radius:8px; z-index:40;}
-  label,input,select { color:#0ff; background:transparent; border:1px solid rgba(0,255,255,0.06); padding:6px; border-radius:6px; margin-top:6px; width:100%; box-sizing:border-box; }
-  #log { height:86px; overflow:auto; margin-top:8px; background:rgba(0,0,0,0.25); padding:6px; border-radius:6px; font-size:13px; }
+  body { margin:0; overflow:hidden; background:#000011; color:#0ff; font-family:monospace; }
+  #ui { position:absolute; top:10px; left:10px; background:rgba(0,0,30,0.7); padding:10px; border-radius:8px; z-index:10; }
+  button { margin:4px; padding:6px 10px; border-radius:6px; background:#002233; color:#0ff; border:1px solid #0ff; cursor:pointer; }
 </style>
 </head>
 <body>
-  <div id="ui">
-    <div id="registerBox">
-      <strong>Choisis ton pays / pseudo</strong>
-      <input id="playerName" placeholder="Ton nom (ex: Empereur)"/>
-      <input id="playerColor" placeholder="#39f" value="#"+(Math.floor(Math.random()*16777215).toString(16)) />
-      <button id="btnRegister" class="btn">Rejoindre (Obtenir planete)</button>
-    </div>
-
-    <div id="controls" style="display:none;">
-      <div><strong id="welcome">Bienvenue</strong></div>
-      <div style="margin-top:6px;">
-        <button id="modeOrbit" class="btn">Vue: Orbite</button>
-        <button id="modeStatic" class="btn">Vue: Statique</button>
-        <button id="modeGalaxy" class="btn">Vue: Galaxie</button>
-      </div>
-      <div style="margin-top:6px;">
-        <button id="camSmooth" class="btn">Cam: Smooth</button>
-        <button id="camCine" class="btn">Cam: Cinématique</button>
-        <button id="camFixed" class="btn">Cam: Fixe</button>
-      </div>
-
-      <div style="margin-top:8px;">
-        <select id="selectedPlanetInfo"></select>
-        <div style="margin-top:6px;">
-          <button id="btnBuild" class="btn">Construire (mine)</button>
-          <button id="btnRecruit" class="btn">Recruter (fighter)</button>
-          <button id="btnCompose" class="btn">Composer Flotte</button>
-        </div>
-      </div>
-
-      <div id="log"></div>
-    </div>
+<div id="ui">
+  <div id="playerInfo">Connecté...</div>
+  <div>
+    <button onclick="build('mine')">Construire Mine</button>
+    <button onclick="build('power')">Construire Centrale</button>
+    <button onclick="build('shipyard')">Construire Chantier</button>
   </div>
-
-  <div id="minimap"></div>
-
+  <div id="planetInfo"></div>
+</div>
 <script>
-(() => {
-  const socket = io();
-  let state = { systems: [], fleets: [], players: {} };
-  let player = null; // { id, name, color, planetId }
+const socket = io();
+let state = { planets: [], fleets: [], players: {} };
+let selectedPlanet = null;
 
-  // UI elements
-  const registerBox = document.getElementById('registerBox');
-  const controls = document.getElementById('controls');
-  const btnRegister = document.getElementById('btnRegister');
-  const playerName = document.getElementById('playerName');
-  const playerColor = document.getElementById('playerColor');
-  const welcome = document.getElementById('welcome');
-  const logDiv = document.getElementById('log');
-  const selectedPlanetInfo = document.getElementById('selectedPlanetInfo');
-  const btnBuild = document.getElementById('btnBuild'), btnRecruit = document.getElementById('btnRecruit'), btnCompose = document.getElementById('btnCompose');
-  const modeOrbit = document.getElementById('modeOrbit'), modeStatic = document.getElementById('modeStatic'), modeGalaxy = document.getElementById('modeGalaxy');
-  const camSmooth = document.getElementById('camSmooth'), camCine = document.getElementById('camCine'), camFixed = document.getElementById('camFixed');
+const config = {
+  type: Phaser.AUTO,
+  width: window.innerWidth,
+  height: window.innerHeight,
+  backgroundColor: '#000011',
+  scene: { preload, create, update }
+};
+let sceneRef;
+const game = new Phaser.Game(config);
 
-  function log(msg){ const el = document.createElement('div'); el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`; logDiv.prepend(el); }
+function preload(){
+  this.load.image('planet', 'https://i.imgur.com/4AiXzf8.png');
+  this.load.image('ship', 'https://i.imgur.com/3b8zXjP.png');
+}
 
-  btnRegister.onclick = () => {
-    const name = playerName.value || ('P'+Math.random().toString(36).slice(2,7));
-    const color = playerColor.value || '#39f';
-    socket.emit('register',{ name, color }, (res) => {
-      if(res && res.ok){
-        player = { id: null, name, color, planetId: res.planetId };
-        registerBox.style.display='none';
-        controls.style.display='block';
-        welcome.innerText = `Empereur ${name} — planète: ${res.planetId || 'N/A'}`;
-        log('Inscription OK. Planète assignée: '+ (res.planetId||'aucune'));
-      } else {
-        log('Inscription échouée');
-      }
-    });
-  };
+function create(){
+  sceneRef = this;
+  this.input.mouse.disableContextMenu();
 
-  // Phaser setup
-  const cfg = { type: Phaser.AUTO, width: window.innerWidth, height: window.innerHeight, backgroundColor:'#000011',
-    scene: { preload, create, update } };
-  const game = new Phaser.Game(cfg);
-  let sceneRef, camMode='smooth', viewMode='orbit'; // orbit/static/galaxy
+  this.input.on('pointerdown', pointer => {
+    const clicked = state.planets.find(p => Math.hypot(p.x-pointer.x, p.y-pointer.y)<30);
+    if(clicked) selectedPlanet = clicked.id;
+  });
+}
 
-  function preload(){
-    this.load.image('sun', null); // no image - we draw shapes
-    this.load.image('ship', null);
-    // small invisible textures: create via graphics later
-  }
+function update(){
+  if(!sceneRef) return;
+  sceneRef.children.removeAll();
 
-  function create(){
-    sceneRef = this;
-    // camera
-    this.cameras.main.setZoom(1);
-    this.cameras.main.setBounds(-2000,-2000,4000,4000);
-    // input
-    this.input.mouse.disableContextMenu();
-
-    // pointer actions: left select, right to send quick fleet
-    this.input.on('pointerdown', pointer => {
-      if(pointer.leftButtonDown()){
-        const clicked = pickPlanetAt(pointer.worldX, pointer.worldY);
-        if(clicked) zoomToPlanet(clicked, camMode);
-      }
-      if(pointer.rightButtonDown()){
-        const clicked = pickPlanetAt(pointer.worldX, pointer.worldY);
-        const myPlanet = player ? findPlanetById(player.planetId) : null;
-        if(clicked && myPlanet && clicked.id !== myPlanet.id){
-          // quick send: half of fighters
-          const qty = Math.floor((myPlanet.army.fighter||0) * 0.5);
-          if(qty <= 0){ log('Aucune unité disponible'); return; }
-          const comp = { fighter: qty, frigate:0, destroyer:0 };
-          socket.emit('sendFleet', { from: myPlanet.id, to: clicked.id, composition: comp }, (res) => {
-            if(res && res.ok) log('Flotte envoyée vers '+clicked.name);
-            else log('Envoi échoué: ' + (res.err||''));
-          });
-        }
-      }
-    });
-  }
-
-  function update(){ drawScene(); updateMinimap(); updateUI(); }
-
-  // helpers: find planets flattened
-  function allPlanets(){ return state.systems.flatMap(s => s.planets); }
-  function findPlanetById(id){ return allPlanets().find(p=>p.id===id); }
-  function pickPlanetAt(x,y){ return allPlanets().find(p => Math.hypot(p.x - x, p.y - y) < Math.max(20, p.size)); }
-
-  // drawing
-  let lastDraw = 0;
-  function drawScene(){
-    if(!sceneRef) return;
-    // throttle redraw
-    const now = performance.now();
-    if(now - lastDraw < 40) return;
-    lastDraw = now;
-
-    // clear everything
-    sceneRef.children.removeAll();
-
-    // Galaxy view: show system positions and connecting lines
-    if(viewMode === 'galaxy'){
-      // draw systems
-      state.systems.forEach(sys => {
-        sceneRef.add.circle(sys.x, sys.y, 22, 0xffcc33, 0.9);
-        sceneRef.add.text(sys.x - 18, sys.y - 6, sys.starName, { color:'#fff', fontSize:'12px' });
-        // draw system planets as small dots around
-        sys.planets.forEach((p,i) => {
-          sceneRef.add.circle(p.x, p.y, Math.max(4, p.size/6), p.owner ? colorFromOwner(p.owner) : 0x6666aa, 1.0);
-        });
-      });
-    } else {
-      // orbit or static: draw stars, orbits, planets
-      state.systems.forEach(sys => {
-        // star
-        sceneRef.add.circle(sys.x, sys.y, 18, 0xffdd88, 1.0).setDepth(-1);
-        // orbits & planets
-        sys.planets.forEach(p => {
-          // orbit ring (only in orbit view)
-          if(viewMode === 'orbit'){
-            sceneRef.add.ellipse(sys.x, sys.y, p.orbitRadius*2, p.orbitRadius*2, 0, 0, 360, 0xffffff, 0.03);
-          }
-          // planet
-          const color = p.owner ? colorFromOwner(p.owner) : 0x66aacc;
-          const circ = sceneRef.add.circle(p.x, p.y, Math.max(6, p.size/4), color, 1.0);
-          // label
-          sceneRef.add.text(p.x - 20, p.y + Math.max(10,p.size/4), p.name, { color:'#0ff', fontSize:'11px', backgroundColor:'rgba(0,0,0,0.32)'});
-        });
-      });
-    }
-
-    // draw fleets
-    state.fleets.forEach(f => {
-      const src = findPlanetById(f.from), dst = findPlanetById(f.to);
-      if(!src || !dst) return;
-      const t = Math.min(1, (Date.now() - f.startTime) / f.travelMs);
-      const x = src.x + (dst.x - src.x) * t;
-      const y = src.y + (dst.y - src.y) * t;
-      const ship = sceneRef.add.triangle(x, y, 0, -6, 10, 0, 0, 6, 0xffffff).setRotation(Phaser.Math.Angle.Between(src.x, src.y, dst.x, dst.y));
-      ship.setFillStyle(f.owner === 'pirate' ? 0xff6600 : colorFromOwner(f.owner));
-    });
-  }
-
-  // camera controls: zoom to a planet
-  function zoomToPlanet(planet, cameraMode){
-    const cam = sceneRef.cameras.main;
-    if(cameraMode === 'smooth'){
-      cam.pan(planet.x, planet.y, 700, 'Power2');
-      cam.zoomTo(1.6, 700);
-    } else if(cameraMode === 'cine'){
-      // simulate warp: quick zoom out + pan + zoom in
-      cam.zoomTo(0.4, 250);
-      setTimeout(()=> cam.pan(planet.x, planet.y, 700, 'Cubic.easeInOut'), 260);
-      setTimeout(()=> cam.zoomTo(1.8, 800), 540);
-    } else {
-      cam.setZoom(1.4);
-      cam.centerOn(planet.x, planet.y);
-    }
-  }
-
-  // UI updates
-  function updateUI(){
-    // populate select with planets the player owns or all if none selected
-    const myPlanets = player ? allPlanets().filter(p => p.owner === player.id) : [];
-    selectedPlanetInfo.innerHTML = '';
-    const addOpt = (p) => { const o = document.createElement('option'); o.value = p.id; o.text = `${p.name} (M:${Math.floor(p.resources.metal)})`; selectedPlanetInfo.appendChild(o); };
-    myPlanets.forEach(addOpt);
-  }
-
-  // minimap (simple)
-  function updateMinimap(){
-    const mm = document.getElementById('minimap');
-    mm.innerHTML = '<strong>Mini-carte</strong><div style="font-size:12px">Systèmes:</div>';
-    state.systems.forEach(s => {
-      const el = document.createElement('div');
-      el.innerText = `${s.starName} (${s.planets.length} p)`;
-      mm.appendChild(el);
-    });
-  }
-
-  // helper: color from owner id
-  function colorFromOwner(owner){
-    if(!owner) return 0x66aacc;
-    // simple hashing to color
-    let h = 0;
-    for(let i=0;i<owner.length;i++) h = (h<<5) - h + owner.charCodeAt(i);
-    const r = (h>>0) & 255, g = (h>>8)&255, b=(h>>16)&255;
-    return (r<<16)+(g<<8)+b;
-  }
-
-  // socket events
-  socket.on('state', s => {
-    state = s;
-    // if player object not set, populate from players map
-    if(player && state.players[player.id]) player = state.players[player.id];
+  state.planets.forEach(p => {
+    const sprite = sceneRef.add.image(p.x, p.y, 'planet').setScale(0.2);
+    if(p.id === selectedPlanet) sceneRef.add.circle(p.x, p.y, 35, 0x00ffff,0.3);
+    sceneRef.add.text(p.x-20,p.y+30,p.name+'\nM:'+p.resources.metal+'\nE:'+p.resources.energy,{color:'#0ff',fontSize:'12px'});
   });
 
-  // control buttons
-  modeOrbit.onclick = () => { viewMode='orbit'; log('Vue: Orbites'); };
-  modeStatic.onclick = () => { viewMode='static'; log('Vue: Statique'); };
-  modeGalaxy.onclick = () => { viewMode='galaxy'; log('Vue: Galaxie'); };
-  camSmooth.onclick = () => { camMode='smooth'; log('Cam: Smooth'); };
-  camCine.onclick = () => { camMode='cine'; log('Cam: Cinématique'); };
-  camFixed.onclick = () => { camMode='fixed'; log('Cam: Fixe'); };
+  state.fleets.forEach(f => {
+    const from = state.planets.find(p=>p.id===f.from);
+    const to = state.planets.find(p=>p.id===f.to);
+    if(!from||!to) return;
+    const x = from.x + (to.x-from.x)*f.progress;
+    const y = from.y + (to.y-from.y)*f.progress;
+    sceneRef.add.image(x,y,'ship').setScale(0.1).setAngle(Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI);
+  });
 
-  btnBuild.onclick = () => {
-    const pid = selectedPlanetInfo.value;
-    if(!pid) { alert('Choisis une de tes planètes dans la liste'); return; }
-    socket.emit('build', { planetId: pid, building: 'mine' }, res => {
-      if(res && res.ok) log('Construction démarrée'); else log('Build failed: ' + (res.err||''));
-    });
-  };
+  // update planet info panel
+  const infoDiv = document.getElementById('planetInfo');
+  const sel = state.planets.find(p=>p.id===selectedPlanet);
+  if(sel) infoDiv.innerText = `Sélectionné: ${sel.name}\nM: ${sel.resources.metal}, E: ${sel.resources.energy}`;
+  else infoDiv.innerText = '';
+}
 
-  btnRecruit.onclick = () => {
-    const pid = selectedPlanetInfo.value;
-    if(!pid) { alert('Choisis une de tes planètes'); return; }
-    const qty = parseInt(prompt('Combien de chasseurs ?', '10')) || 0;
-    socket.emit('recruit', { planetId: pid, unit: 'fighter', qty }, res => {
-      if(res && res.ok) log('Recrutement OK'); else log('Recrutement échoué');
-    });
-  };
+socket.on('state', s => { state = s; const me = Object.values(s.players).find(p=>p.planetId); if(me) document.getElementById('playerInfo').innerText='Planète assignée: '+me.planetId; });
 
-  btnCompose.onclick = () => {
-    const from = selectedPlanetInfo.value;
-    if(!from) { alert('Choisis une de tes planètes'); return; }
-    const to = prompt('ID planète cible (ex: 1-2):');
-    if(!to) return;
-    const fighter = parseInt(prompt('fighters ?', '10')) || 0;
-    const frigate = parseInt(prompt('frigates ?', '0')) || 0;
-    const destroyer = parseInt(prompt('destroyers ?', '0')) || 0;
-    const comp = { fighter, frigate, destroyer };
-    socket.emit('sendFleet', { from, to, composition: comp }, res => {
-      if(res && res.ok) log('Flotte envoyée'); else log('Erreur envoi: ' + (res.err||''));
-    });
-  };
-
-})();
+function build(type){
+  if(!selectedPlanet) return alert('Sélectionne une planète');
+  socket.emit('build',{planetId:selectedPlanet, building:type});
+}
 </script>
 </body>
 </html>
