@@ -8,16 +8,15 @@ const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: '*' } });
 
 let planets = [];
-let fleets = []; // { id, fromPlanet, toPlanet, ships: 50, progress: 0, owner }
+let fleets = [];
 
 function generateGalaxy() {
   planets = [];
-  // Terre
-  planets.push({ id: 0, name: "Terre", x: 960, y: 540, owner: null, isHome: true, resources: { metal: 1000, energy: 800 }, buildings: { mine: 1, power: 1, lab: 0, shipyard: 0 }, research: { spaceTravel: false } });
-  for (let i = 1; i < 50; i++) {
-    planets.push({ id: i, name: `Planète ${i}`, x: Math.random() * 1800 + 100, y: Math.random() * 900 + 100, owner: 'neutre', resources: { metal: Math.random() * 1000, energy: Math.random() * 600 }, army: 50 });
+  planets.push({ id: 0, name: "Terre", x: 960, y: 540, owner: null, isHome: true, resources: { metal: 2000, energy: 1500 }, buildings: { mine: 5, power: 5, lab: 3, shipyard: 1 }, research: { spaceTravel: true } });
+  for (let i = 1; i < 40; i++) {
+    planets.push({ id: i, name: `Système ${i}`, x: Math.random() * 1600 + 160, y: Math.random() * 800 + 100, owner: 'neutre', resources: { metal: 500 + Math.random() * 1500, energy: 300 + Math.random() * 1000 }, army: 30 + Math.random() * 70 });
   }
-  console.log('🌌 Galaxie V3 générée – esthétique et gameplay améliorés !');
+  console.log('🌌 V4 Galaxie générée – esthétique et gameplay immersif !');
 }
 generateGalaxy();
 
@@ -27,40 +26,38 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 io.on('connection', (socket) => {
   socket.emit('galaxyUpdate', { planets, fleets });
 
+  if (planets[0].owner === null) planets[0].owner = socket.id;
+
   socket.on('build', (data) => {
     const planet = planets.find(p => p.id === data.planetId);
     if (planet && planet.owner === socket.id) {
       planet.buildings[data.building] = (planet.buildings[data.building] || 0) + 1;
-      if (data.building === 'lab' && planet.buildings.lab >= 5) planet.research.spaceTravel = true;
+      if (planet.buildings.lab >= 5) planet.research.spaceTravel = true;
       io.emit('galaxyUpdate', { planets, fleets });
     }
   });
 
   socket.on('sendFleet', (data) => {
     const from = planets.find(p => p.id === data.from);
-    if (from && from.owner === socket.id && from.research.spaceTravel && from.buildings.shipyard >= 1) {
-      fleets.push({ id: fleets.length, from: data.from, to: data.to, ships: 50, progress: 0, owner: socket.id });
+    const to = planets.find(p => p.id === data.to);
+    if (from && from.owner === socket.id && from.research.spaceTravel && from.buildings.shipyard >= 1 && from !== to) {
+      fleets.push({ id: fleets.length, from: data.from, to: data.to, ships: 100, progress: 0, owner: socket.id });
       io.emit('galaxyUpdate', { planets, fleets });
     }
   });
-
-  // Assign Terre
-  if (planets[0].owner === null) planets[0].owner = socket.id;
 });
 
-// Tick : production + mouvement flottes
+// Tick
 setInterval(() => {
-  // Production
   planets.forEach(p => {
     if (p.owner) {
-      p.resources.metal += (p.buildings.mine || 0) * 10;
-      p.resources.energy += (p.buildings.power || 0) * 8;
+      p.resources.metal += (p.buildings.mine || 0) * 15;
+      p.resources.energy += (p.buildings.power || 0) * 12;
     }
   });
 
-  // Mouvement flottes
-  fleets.forEach(f => {
-    f.progress += 0.5; // Avance
+  fleets = fleets.filter(f => {
+    f.progress += 2;
     if (f.progress >= 100) {
       const target = planets.find(p => p.id === f.to);
       if (target.army < f.ships) {
@@ -69,12 +66,13 @@ setInterval(() => {
       } else {
         target.army -= f.ships;
       }
-      fleets = fleets.filter(fl => fl.id !== f.id);
+      return false;
     }
+    return true;
   });
 
   io.emit('galaxyUpdate', { planets, fleets });
-}, 1000);
+}, 500);
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`🌟 V3 lancée – esthétique et gameplay au top !`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🌟 V4 lancée – BEAUCOUP MOINS MOCHE ET PLUS FUN !`));
