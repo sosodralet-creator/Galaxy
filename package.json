@@ -1,7 +1,7 @@
 {
-  "name": "Galaxy conquest",
-  "version": "0.1.0",
-  "description": "Call of War mais conquête spatiale ! Open source RTS browser",
+  "name": "soso-galaxy-conquest",
+  "version": "1.0.0",
+  "description": "Conquête spatiale comme Call of War",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
