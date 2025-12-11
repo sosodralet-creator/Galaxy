@@ -3,32 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Soso Galaxy Conquest V3 - L'Empire Spatial</title>
+  <title>Soso Galaxy Conquest V4 - L'Empire des Étoiles</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { margin: 0; overflow: hidden; font-family: 'Orbitron', sans-serif; }
-    #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,50,0.8); padding: 20px; border-radius: 10px; color: white; z-index: 10; }
-    button { background: #00ffff; color: black; border: none; padding: 10px; margin: 5px; border-radius: 5px; cursor: pointer; }
-    button:hover { background: #00cccc; }
+    body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; color: #00ffff; }
+    #ui { position: absolute; top: 20px; left: 20px; background: rgba(0, 20, 40, 0.8); padding: 20px; border: 2px solid #00ffff; border-radius: 15px; z-index: 10; box-shadow: 0 0 20px #00ffff; }
+    button { background: #001122; color: #00ffff; border: 1px solid #00ffff; padding: 12px; margin: 8px; border-radius: 8px; cursor: pointer; box-shadow: 0 0 10px #00ffff; }
+    button:hover { background: #003366; box-shadow: 0 0 20px #00ffff; }
+    h1 { text-shadow: 0 0 10px #00ffff; }
   </style>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="ui">
   <h1>SOSO GALAXY CONQUEST</h1>
-  <p>Tutoriel : Construis sur Terre → Recherche Voyage Spatial → Envoie des flottes pour conquérir !</p>
-  <div id="terreControls">
-    <button onclick="build('mine')">+ Mine Métal</button>
-    <button onclick="build('power')">+ Centrale Énergie</button>
-    <button onclick="build('lab')">+ Labo Recherche</button>
-    <button onclick="build('shipyard')">+ Chantier Spatial</button>
+  <p>Empereur, construis ton empire depuis la Terre !</p>
+  <div>
+    <button onclick="build('mine')">Construire Mine Métal</button>
+    <button onclick="build('power')">Construire Centrale</button>
+    <button onclick="build('lab')">Construire Labo Recherche</button>
+    <button onclick="build('shipyard')">Construire Chantier Spatial</button>
   </div>
+  <p>Clic gauche sur ta planète → Clic droit sur cible pour envoyer flotte !</p>
 </div>
 
 <script>
   const socket = io();
-  let selectedPlanet = 0;
+  let selectedPlanet = null;
 
   const config = {
     type: Phaser.AUTO,
@@ -40,33 +41,52 @@
   const game = new Phaser.Game(config);
 
   function preload() {
-    this.load.image('background', 'https://images.unsplash.com/photo-1462332420958-a05d1e145a55?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'); // Fond galaxie HD
-    this.load.image('earth', 'https://www.sciencealert.com/images/2021-03/processed/EarthFromSpace_1024.jpg'); // Terre stylée
-    this.load.image('alienPlanet', 'https://wallpapercave.com/wp/wp1812778.jpg'); // Planètes alien
-    this.load.image('ship', 'https://i.imgur.com/O2W5Z3f.png'); // Vaisseau simple
+    this.load.image('bg', 'https://images.unsplash.com/photo-1464802686295-074a3d5b9849?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'); // Fond galaxie épique
+    this.load.image('earth', 'https://thumbs.dreamstime.com/b/earth-illustration-d-closer-to-real-rendered-high-quality-edited-photoshop-textures-optimal-render-settigns-34882755.jpg'); // Terre réaliste
+    this.load.image('planet', 'https://wallpapercave.com/wp/wp1812778.jpg'); // Planètes alien
+    this.load.image('ship', 'https://i.imgur.com/3b8zXjP.png'); // Vaisseau sci-fi
   }
 
   function create() {
-    this.add.image(960, 540, 'background').setDepth(-1).setScale(1.5);
+    this.add.image(960, 540, 'bg').setDepth(-1).setScale(1.2);
+
+    this.input.mouse.disableContextMenu();
 
     socket.on('galaxyUpdate', (data) => {
-      this.children.removeAll(p => p.type !== 'Image' || p.texture.key !== 'background'); // Garde fond
+      this.children.list.filter(obj => obj.type !== 'Image' || obj.texture.key !== 'bg').forEach(obj => obj.destroy());
 
       data.planets.forEach(p => {
-        const img = p.isHome ? 'earth' : 'alienPlanet';
-        const planet = this.add.image(p.x, p.y, img).setInteractive().setScale(0.2);
-        planet.on('pointerdown', () => selectedPlanet = p.id);
+        const img = p.isHome ? 'earth' : 'planet';
+        const planet = this.add.image(p.x, p.y, img).setScale(p.isHome ? 0.3 : 0.15).setInteractive();
+        planet.on('pointerdown', () => {
+          selectedPlanet = p.id;
+          console.log('Planète sélectionnée : ' + p.name);
+        });
+        planet.on('pointerover', () => planet.setTint(0x00ffff));
+        planet.on('pointerout', () => planet.clearTint());
 
-        this.add.text(p.x - 100, p.y - 100, p.name, { color: '#00ffff', fontSize: '20px' });
+        this.add.text(p.x - 100, p.y + (p.isHome ? 100 : 60), p.name + '\nMétal: ' + p.resources.metal + '\nÉnergie: ' + p.resources.energy, { color: '#00ffff', fontSize: '16px', backgroundColor: '#00000088' });
       });
 
       data.fleets.forEach(f => {
         const from = data.planets.find(p => p.id === f.from);
         const to = data.planets.find(p => p.id === f.to);
         if (from && to) {
-          const ship = this.add.image(from.x + (to.x - from.x) * (f.progress / 100), from.y + (to.y - from.y) * (f.progress / 100), 'ship').setScale(0.1);
+          const x = from.x + (to.x - from.x) * (f.progress / 100);
+          const y = from.y + (to.y - from.y) * (f.progress / 100);
+          this.add.image(x, y, 'ship').setScale(0.1).setAngle(Phaser.Math.RadToDeg(Math.atan2(to.y - from.y, to.x - from.x)));
         }
       });
+    });
+
+    this.input.on('pointerdown', (pointer) => {
+      if (pointer.rightButtonDown() && selectedPlanet !== null) {
+        const target = data.planets.find(p => Phaser.Math.Distance.Between(pointer.worldX, pointer.worldY, p.x, p.y) < 100);
+        if (target && target.id !== selectedPlanet) {
+          socket.emit('sendFleet', { from: selectedPlanet, to: target.id });
+          selectedPlanet = null;
+        }
+      }
     });
   }
 
@@ -75,9 +95,6 @@
   function build(type) {
     socket.emit('build', { planetId: 0, building: type });
   }
-
-  // Envoi flotte (clic droit ou bouton futur)
-  document.addEventListener('contextmenu', e => e.preventDefault());
 </script>
 </body>
 </html>
