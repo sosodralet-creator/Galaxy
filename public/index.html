@@ -1,72 +1,241 @@
-<!-- public/index.html -->
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>SpaceConquest — Prototype</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
-<style>
-:root{--bg:#0b1221;--panel:#0f1a2b;--accent:#6ec1ff}
-html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue';background:linear-gradient(180deg,#03040a 0%,#071028 50%,#071a2b 100%);color:#d6e8ff}
-.app{display:grid;grid-template-columns:260px 1fr 300px;gap:14px;padding:14px;height:100vh;box-sizing:border-box}
-.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(3,9,23,0.6)}
-h2{margin:6px 0 10px;font-size:16px}
-.countries button{display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);width:100%;color:inherit}
-.map{background:linear-gradient(180deg,#071936 0%,#051124 100%);border-radius:12px;padding:12px;position:relative;min-height:580px}
-.planet{position:absolute;border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#071a2b}
-.planet .label{position:absolute;top:56px;left:50%;transform:translateX(-50%);font-size:12px;color:#bfe6ff}
-.hud{display:flex;flex-direction:column;gap:8px}
-button.action{background:linear-gradient(90deg,var(--accent),#8de0ff);border:none;color:#03202f;padding:8px;border-radius:8px;cursor:pointer}
-.list{max-height:220px;overflow:auto}
-.small{font-size:12px;opacity:0.9}
-.row{display:flex;gap:8px;align-items:center}
-.rocket{width:18px;height:18px;border-radius:3px;background:#ffd;display:inline-block}
-.status{font-size:13px}
-</style>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoStrategy - Sélection du Pays</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.168.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.168.0/examples/js/loaders/GLTFLoader.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Orbitron', sans-serif;
+      background: #000;
+      color: #0ff;
+    }
+
+    #container {
+      display: flex;
+      height: 100vh;
+    }
+
+    #earth-container {
+      flex: 1;
+      position: relative;
+      background: radial-gradient(circle at center, #001122 0%, #000 70%);
+    }
+
+    #ui-panel {
+      width: 400px;
+      background: rgba(10, 20, 40, 0.85);
+      backdrop-filter: blur(10px);
+      border-left: 1px solid #0ff;
+      box-shadow: -10px 0 30px rgba(0, 255, 255, 0.3);
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2.5em;
+      margin-bottom: 50px;
+      text-shadow: 0 0 20px #0ff;
+      letter-spacing: 4px;
+    }
+
+    .country-option {
+      background: rgba(0, 50, 100, 0.6);
+      border: 1px solid #0ff;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 15px 0;
+      cursor: pointer;
+      transition: all 0.4s ease;
+      text-align: center;
+      font-size: 1.3em;
+      box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+    }
+
+    .country-option:hover:not(.taken) {
+      transform: translateY(-8px);
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.6);
+      background: rgba(0, 80, 150, 0.8);
+    }
+
+    .country-option.taken {
+      opacity: 0.4;
+      cursor: not-allowed;
+      background: rgba(100, 0, 0, 0.6);
+      border-color: #f55;
+    }
+
+    .country-option.taken::after {
+      content: " (Déjà pris)";
+      color: #f88;
+      font-size: 0.8em;
+    }
+
+    .select-btn {
+      margin-top: 40px;
+      padding: 15px;
+      font-size: 1.4em;
+      background: #0ff;
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 0 20px #0ff;
+      transition: all 0.3s;
+    }
+
+    .select-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 40px #0ff;
+    }
+
+    .select-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #555;
+      box-shadow: none;
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-<div class="app">
-<div class="card">
-<h2>Joueur</h2>
-<div>
-<div class="row"><input id="nameInput" placeholder="Votre nom" style="flex:1;padding:6px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit"/></div>
-<div style="height:8px"></div>
-<h2>Pays</h2>
-<div class="countries" id="countries"></div>
-<h2>Actions</h2>
-<div class="row"><button id="buildLauncher" class="action">Construire Lanceur (200)</button></div>
-<div style="height:8px"></div>
-<div class="row"><select id="researchSelect"></select><button id="startResearch" class="action">Lancer Recherche (150)</button></div>
-<div style="height:8px"></div>
-<h2 class="small">Etat</h2>
-<div id="playerInfo" class="small"></div>
-</div>
-</div>
+  <div id="container">
+    <!-- Partie gauche : Terre 3D -->
+    <div id="earth-container"></div>
 
+    <!-- Partie droite : Sélection du pays -->
+    <div id="ui-panel">
+      <h1>SÉLECTIONNEZ VOTRE PAYS</h1>
 
-<div class="card map" id="map">
-<h2 style="color:#bfe6ff">Carte Système</h2>
-<div id="planetsLayer"></div>
-</div>
+      <div class="country-option" data-country="France">🇫🇷 France</div>
+      <div class="country-option" data-country="États-Unis">🇺🇸 États-Unis</div>
+      <div class="country-option taken" data-country="Chine">🇨🇳 Chine</div>
+      <div class="country-option" data-country="Russie">🇷🇺 Russie</div>
+      <div class="country-option" data-country="Brésil">🇧🇷 Brésil</div>
+      <div class="country-option" data-country="Inde">🇮🇳 Inde</div>
+      <div class="country-option taken" data-country="Japon">🇯🇵 Japon</div>
+      <div class="country-option" data-country="Allemagne">🇩🇪 Allemagne</div>
+      <div class="country-option" data-country="Canada">🇨🇦 Canada</div>
 
+      <button id="confirm-btn" class="select-btn" disabled>CONFIRMER ET REJOINDRE</button>
+    </div>
+  </div>
 
-<div class="card hud">
-<h2>Infos & Flotte</h2>
-<div class="small" id="playersList"></div>
-<h2>Rockets en vol</h2>
-<div id="rocketsList" class="list small"></div>
-<h2>Notifications</h2>
-<div id="notifications" class="small"></div>
-</div>
-</div>
+  <script>
+    // Terre 3D avec Three.js
+    let scene, camera, renderer, earth, controls;
+    const earthContainer = document.getElementById('earth-container');
 
+    function initEarth() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, earthContainer.clientWidth / earthContainer.clientHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(earthContainer.clientWidth, earthContainer.clientHeight);
+      earthContainer.appendChild(renderer.domElement);
 
-<script>
-const socket = io();
-let localPlayer = null;
-let countries = [];
-let researchDefs = {};
-let state = null;
+      // Contrôles orbite limités
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableZoom = true;
+      controls.enablePan = false;
+      controls.minDistance = 3;
+      controls.maxDistance = 8;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.5;
 
+      // Lumière
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(5, 3, 5);
+      scene.add(directionalLight);
 
-const nameInput = document.getElementById('nameInput');
-const countriesDiv = document.getElementById('countries');
-const researchSelect = document.getElementById('researchSelect');
-const buildLauncherBtn = document.getElementById('buildLa
+      // Chargement d'un modèle simple de Terre (sphère texturée)
+      const loader = new THREE.TextureLoader();
+      const geometry = new THREE.SphereGeometry(2, 64, 64);
+      loader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg', (texture) => {
+        const material = new THREE.MeshPhongMaterial({
+          map: texture,
+          specular: new THREE.Color(0x333333),
+          shininess: 5
+        });
+        earth = new THREE.Mesh(geometry, material);
+        scene.add(earth);
+      });
+
+      // Nuages optionnels
+      loader.load('https://threejs.org/examples/textures/planets/earth_clouds_1024.png', (cloudsTexture) => {
+        const cloudsGeo = new THREE.SphereGeometry(2.01, 64, 64);
+        const cloudsMat = new THREE.MeshPhongMaterial({
+          map: cloudsTexture,
+          transparent: true,
+          opacity: 0.4
+        });
+        const clouds = new THREE.Mesh(cloudsGeo, cloudsMat);
+        scene.add(clouds);
+        // Animation des nuages
+        function animateClouds() {
+          clouds.rotation.y += 0.0005;
+          requestAnimationFrame(animateClouds);
+        }
+        animateClouds();
+      });
+
+      camera.position.z = 5;
+
+      window.addEventListener('resize', onWindowResize);
+      animate();
+    }
+
+    function onWindowResize() {
+      camera.aspect = earthContainer.clientWidth / earthContainer.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(earthContainer.clientWidth, earthContainer.clientHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (earth) earth.rotation.y += 0.0005;
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Gestion du sélecteur de pays
+    let selectedCountry = null;
+    const countries = document.querySelectorAll('.country-option');
+    const confirmBtn = document.getElementById('confirm-btn');
+
+    countries.forEach(country => {
+      country.addEventListener('click', () => {
+        if (country.classList.contains('taken')) return;
+
+        // Désélectionner les autres
+        countries.forEach(c => c.style.border = '1px solid #0ff');
+        // Sélectionner celui-ci
+        country.style.border = '2px solid #0ff';
+        country.style.boxShadow = '0 0 40px rgba(0, 255, 255, 0.8)';
+        selectedCountry = country.getAttribute('data-country');
+        confirmBtn.disabled = false;
+      });
+    });
+
+    confirmBtn.addEventListener('click', () => {
+      if (selectedCountry) {
+        alert(`Vous avez rejoint le jeu en tant que dirigeant de : ${selectedCountry} !\n(Prochaines étapes à venir...)`);
+        // Ici tu pourras rediriger vers la vue du pays
+      }
+    });
+
+    // Initialisation
+    initEarth();
+  </script>
+</body>
+</html>
